@@ -1,0 +1,6 @@
+{
+  "name": "Mutant Rest application with heroku resources",
+  "description": "A mutant rest application",
+  "image": "heroku/gradle",
+  "addons": [ ]
+}

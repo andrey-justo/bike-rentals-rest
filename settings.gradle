@@ -1,0 +1,3 @@
+rootProject.name = 'bike-rentals-rest'
+
+include 'bike-rentals-core'

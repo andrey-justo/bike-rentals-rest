@@ -1,0 +1,91 @@
+plugins {
+    id 'net.researchgate.release' version '2.5.0'
+    id 'nebula.rpm' version '4.3.0'
+}
+
+allprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
+    apply plugin: 'eclipse'
+    apply plugin: 'maven'
+    apply plugin: 'jacoco'
+    apply plugin: 'findbugs'
+
+    group 'com.justo.mutant'
+
+	repositories {
+        mavenCentral()
+        jcenter()
+    }
+
+    task setCompiler {
+        compileJava.options.compilerArgs << '-parameters'
+    }
+    
+    jacoco {
+        toolVersion = '0.7.6.201602180812'
+	}
+
+    compileJava.dependsOn setCompiler
+    jacocoTestReport.dependsOn test
+    
+    /******************************************************************************
+ 	* FINDBUGS CODE COVERAGE                                                       *
+ 	******************************************************************************/
+	tasks.withType(FindBugs) {
+		ignoreFailures = true
+		source 'src'
+		include "*/.java"
+		exclude "/build/"
+    	reports {
+        	xml.enabled false
+        	html.enabled true
+        	html.stylesheet resources.text.fromFile('../config/xsl/fancy.xsl')
+    	}
+	}
+}
+
+subprojects {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+    compileJava.options.encoding = 'UTF-8'
+    defaultTasks = ['clean', 'build']
+
+    project.ext.environment = System.getProperty("env", "dev")
+
+    configurations.all {
+        exclude group: 'log4j'
+        exclude group: 'org.apache.tomcat.embed'
+
+        resolutionStrategy.cacheChangingModulesFor 600, 'seconds'
+    }
+    
+    task findbugsAll {
+    	dependsOn jacocoTestReport
+        dependsOn tasks.withType(FindBugs)
+    }
+}
+
+/******************************************************************************
+ * GRADLE WRAPPER CONTROL                                                     *
+ ******************************************************************************/
+task wrapper(type: Wrapper) {
+    gradleVersion = '3.3'
+}
+
+/******************************************************************************
+ * JACOCO CODE COVERAGE                                                       *
+ ******************************************************************************/
+jacocoTestReport {
+    reports {
+        html {
+            enabled true
+        }
+        
+        xml {
+        	enabled true
+        }
+    }
+}
+
+test.finalizedBy(project.tasks.jacocoTestReport)

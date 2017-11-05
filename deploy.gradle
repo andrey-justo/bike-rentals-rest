@@ -1,0 +1,89 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.ajoberstar:gradle-git:1.3.0'
+    }
+}
+
+task setUpProjectProperties(dependsOn: jar) {
+    doFirst {
+        project.ext.classpath = "../libs/*:../resources/*:../$jar.archiveName"
+    }
+
+    project.ext.jmxConfig = " -Djava.rmi.server.hostname=\$HOSTNAME -Dcom.sun.management.jmxremote.port=${jmxPort} -Dcom.sun.management.jmxremote.ssl=false " +
+            "-Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.authenticate=false"
+    project.ext.rootFolder = "/justo/${project.name}"
+    project.ext.logsFolder = "/justo-logs/${project.name}"
+    project.ext.user = serviceUser
+    project.ext.javaPath = "/justo/jdk8/bin/java"
+
+    switch (project.ext.environment) {
+        case "prod":
+            project.ext.jvmOpts = "-Xmx${prodMaxMemoryMB}m -Xms${prodInitMemoryMB}m -Denv=\"${project.ext.environment}\" -Dspring.profiles.active=\"${project.ext.environment}\" -Dfile.encoding=UTF-8 -Dlog.path=\"${project.ext.logsFolder}\" ${project.ext.jmxConfig}".toString()
+            break
+        case "stag":
+            project.ext.jvmOpts = "-Xmx${stagMaxMemoryMB}m -Xms${stagInitMemoryMB}m -Denv=\"${project.ext.environment}\" -Dspring.profiles.active=\"${project.ext.environment}\" -Dfile.encoding=UTF-8 -Dlog.path=\"${project.ext.logsFolder}\" ${project.ext.jmxConfig}".toString()
+            break
+        case "dev":
+            project.ext.user = "root"
+            project.ext.javaPath = "java"
+            project.ext.jvmOpts = "-Xmx${stagMaxMemoryMB}m -Xms${stagInitMemoryMB}m -Denv=\"${project.ext.environment}\" -Dspring.profiles.active=\"${project.ext.environment}\" -Dfile.encoding=UTF-8 -Dlog.path=\"${project.ext.logsFolder}\" ${project.ext.jmxConfig}".toString()
+
+    }
+}
+
+/* copy scripts */
+task copyScripts(dependsOn: setUpProjectProperties, type: Copy) {
+
+    doFirst {
+        def tokensMap = [:]
+        tokensMap.putAll([
+                mainClass  : mainClassName,
+                serviceName: project.name,
+                key        : serviceUUID,
+                folder     : project.ext.rootFolder.toString(),
+                logsFolder : project.ext.logsFolder.toString(),
+                user       : project.ext.user.toString(),
+                javaPath   : project.ext.javaPath.toString(),
+                jvmOpts    : project.ext.jvmOpts.toString(),
+                classpath  : project.ext.classpath.toString(),
+        ])
+        filter(ReplaceTokens, tokens: tokensMap)
+    }
+    from "../bootstrap"
+    into "$buildDir/bootstrap"
+}
+
+task buildRpm(type: Rpm) {
+    packageName = project.name
+    release = project.ext.release
+    arch = NOARCH
+    os = LINUX
+    user = serviceUser
+
+    addParentDirs = false
+
+    into "/justo/${project.name}"
+
+    from(copyScripts) {
+        into 'bootstrap'
+    }
+
+    from(jar.outputs.files)
+
+    from(configurations.compile) {
+        into 'libs'
+    }
+
+    from(configurations.runtime) {
+        into 'libs'
+    }
+}
+
+artifacts {
+    archives buildRpm
+}
